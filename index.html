@@ -1,71 +1,467 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Pose Alignment Template</title>
-<style>
-body{
-  margin:0;
-  background:#000;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  height:100vh;
-}
-.container{
-  position:relative;
-  width:100%;
-  max-width:420px;
-  aspect-ratio:3/4;
-  background:#000;
-}
-#video{
-  position:absolute;
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  z-index:1;
-}
-.grid{
-  position:absolute;
-  width:100%;
-  height:100%;
-  z-index:2;
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  grid-template-rows:repeat(3,1fr);
-  border:2px solid rgba(255,255,255,0.6);
-}
-.grid div{
-  border:1px solid rgba(255,255,255,0.3);
-}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>體態拍攝模板（三姿勢）</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: #000;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 480px;
+      padding: 12px 8px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* 視訊 + overlay 容器：固定 3:4 */
+    .camera-frame {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      margin: 0 auto;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 2px solid #00c3ff;
+      background: #000;
+    }
+
+    video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* 前鏡頭鏡像，符合你在鏡子看到自己 */
+    }
+
+    canvas {
+      display: none; /* 拍照用的隱藏畫布 */
+    }
+
+    /* 九宮格與線條 overlay */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .grid-line {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.28);
+    }
+    .v1 { left: 33.333%; top: 0; width: 1px; height: 100%; }
+    .v2 { left: 66.666%; top: 0; width: 1px; height: 100%; }
+    .h1 { top: 33.333%; left: 0; height: 1px; width: 100%; }
+    .h2 { top: 66.666%; left: 0; height: 1px; width: 100%; }
+
+    .center-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 2px;
+      margin-left: -1px;
+      background: rgba(0, 255, 180, 0.7);
+    }
+
+    .chest-line {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      top: 38%;
+      background: rgba(255, 180, 0, 0.75);
+    }
+
+    .waist-line {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      top: 63%;
+      background: rgba(255, 80, 200, 0.7);
+    }
+
+    /* 姿勢外框 (SVG-like 用 div 拼) */
+    .pose-outline {
+      position: absolute;
+      inset: 0;
+      display: none;
+    }
+
+    .pose-outline.active {
+      display: block;
+    }
+
+    /* 共用人形主體外框：頭、肩、軀幹、骨盆 */
+    .pose-outline .head {
+      position: absolute;
+      width: 14%;
+      aspect-ratio: 1 / 1;
+      border-radius: 50%;
+      border: 2px dashed rgba(0, 200, 255, 0.9);
+      left: 50%;
+      top: 10%;
+      transform: translateX(-50%);
+    }
+
+    .pose-outline .torso {
+      position: absolute;
+      width: 30%;
+      height: 26%;
+      border-radius: 40% / 60%;
+      border: 2px dashed rgba(0, 200, 255, 0.85);
+      left: 50%;
+      top: 24%;
+      transform: translateX(-50%);
+    }
+
+    .pose-outline .pelvis {
+      position: absolute;
+      width: 26%;
+      height: 16%;
+      border-radius: 40%;
+      border: 2px dashed rgba(0, 200, 255, 0.8);
+      left: 50%;
+      top: 47%;
+      transform: translateX(-50%);
+    }
+
+    .pose-outline .leg-line {
+      position: absolute;
+      width: 2px;
+      background: rgba(0, 200, 255, 0.8);
+      top: 55%;
+      height: 30%;
+    }
+
+    .pose-outline .leg-left  { left: 44%; }
+    .pose-outline .leg-right { left: 56%; }
+
+    .pose-outline .foot-line {
+      position: absolute;
+      height: 2px;
+      width: 26%;
+      background: rgba(0, 200, 255, 0.8);
+      bottom: 9%;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    /* 正面：雙臂略外展 */
+    .pose-front .arm {
+      position: absolute;
+      width: 20%;
+      height: 20%;
+      border-radius: 999px;
+      border: 2px dashed rgba(0, 200, 255, 0.8);
+      top: 26%;
+    }
+    .pose-front .arm-left  { left: 16%; }
+    .pose-front .arm-right { right: 16%; }
+
+    /* 側面：上臂 + 前臂簡化一條 */
+    .pose-side .arm-line {
+      position: absolute;
+      width: 20%;
+      height: 2px;
+      background: rgba(0, 200, 255, 0.8);
+      top: 34%;
+    }
+
+    /* 左側：人面向畫面左邊 */
+    .pose-left .torso,
+    .pose-left .pelvis,
+    .pose-left .head {
+      left: 40%;
+      transform: translateX(-50%);
+    }
+    .pose-left .leg-left  { left: 35%; }
+    .pose-left .leg-right { left: 45%; }
+    .pose-left .foot-line { left: 40%; transform: translateX(-50%); }
+    .pose-left .arm-line { left: 22%; }
+
+    /* 右側：人面向畫面右邊（鏡像） */
+    .pose-right .torso,
+    .pose-right .pelvis,
+    .pose-right .head {
+      left: 60%;
+      transform: translateX(-50%);
+    }
+    .pose-right .leg-left  { left: 55%; }
+    .pose-right .leg-right { left: 65%; }
+    .pose-right .foot-line { left: 60%; transform: translateX(-50%); }
+    .pose-right .arm-line { right: 22%; }
+
+    /* 提示文字 */
+    .hint {
+      position: absolute;
+      left: 6px;
+      top: 6px;
+      font-size: 11px;
+      color: #eee;
+      text-shadow: 0 0 4px #000;
+      line-height: 1.3;
+      max-width: 70%;
+    }
+
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .step-label {
+      font-size: 14px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+    }
+
+    button {
+      flex: 1;
+      padding: 8px 6px;
+      border-radius: 999px;
+      border: none;
+      background: linear-gradient(135deg, #00b3ff, #0077ff);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    .note {
+      font-size: 11px;
+      color: #ccc;
+      text-align: center;
+      line-height: 1.4;
+      margin-top: 2px;
+    }
+  </style>
 </head>
 <body>
+  <div class="app">
+    <div class="camera-frame">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas"></canvas>
 
-<div class="container">
-  <video id="video" autoplay playsinline></video>
-  <div class="grid">
-    <div></div><div></div><div></div>
-    <div></div><div></div><div></div>
-    <div></div><div></div><div></div>
+      <div class="overlay">
+        <!-- 九宮格 -->
+        <div class="grid-line v1"></div>
+        <div class="grid-line v2"></div>
+        <div class="grid-line h1"></div>
+        <div class="grid-line h2"></div>
+
+        <!-- 身體對齊線 -->
+        <div class="center-line"></div>
+        <div class="chest-line"></div>
+        <div class="waist-line"></div>
+
+        <!-- 正面姿勢外框 -->
+        <div class="pose-outline pose-front active" data-step="0">
+          <div class="head"></div>
+          <div class="torso"></div>
+          <div class="pelvis"></div>
+          <div class="leg-line leg-left"></div>
+          <div class="leg-line leg-right"></div>
+          <div class="foot-line"></div>
+          <div class="arm arm-left"></div>
+          <div class="arm arm-right"></div>
+          <div class="hint">
+            步驟 1：正面<br>
+            ・站在中線上，雙腳與肩同寬<br>
+            ・胸口貼近橘色線，肚臍在粉色線附近<br>
+            ・手自然下垂，略微離開身體
+          </div>
+        </div>
+
+        <!-- 左側姿勢外框 -->
+        <div class="pose-outline pose-side pose-left" data-step="1">
+          <div class="head"></div>
+          <div class="torso"></div>
+          <div class="pelvis"></div>
+          <div class="leg-line leg-left"></div>
+          <div class="leg-line leg-right"></div>
+          <div class="foot-line"></div>
+          <div class="arm-line"></div>
+          <div class="hint">
+            步驟 2：左側<br>
+            ・左肩面向鏡頭，耳朵在中線附近<br>
+            ・保持自然站姿，不刻意收小腹<br>
+            ・手臂自然垂放在身側
+          </div>
+        </div>
+
+        <!-- 右側姿勢外框 -->
+        <div class="pose-outline pose-side pose-right" data-step="2">
+          <div class="head"></div>
+          <div class="torso"></div>
+          <div class="pelvis"></div>
+          <div class="leg-line leg-left"></div>
+          <div class="leg-line leg-right"></div>
+          <div class="foot-line"></div>
+          <div class="arm-line"></div>
+          <div class="hint">
+            步驟 3：右側<br>
+            ・右肩面向鏡頭，耳朵在中線附近<br>
+            ・同樣保持自然站姿<br>
+            ・完成後就有一組固定三角度
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="step-label" id="stepLabel">步驟 1 / 3：正面</div>
+      <div class="btn-row">
+        <button id="prevBtn" disabled>上一個</button>
+        <button id="captureBtn">拍照並下載</button>
+        <button id="nextBtn">下一個</button>
+      </div>
+      <div class="note">
+        拍照時請把亮度調高一點，盡量使用同一個地點、同一個距離與姿勢，方便比對胸肌與腰線變化。
+      </div>
+    </div>
   </div>
-</div>
 
-<script>
-async function initCam(){
-  try{
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:"user" },
-      audio:false
+  <script>
+    // 目前步驟：0=正面, 1=左側, 2=右側
+    let currentStep = 0;
+    const maxStep = 2;
+
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const stepLabel = document.getElementById("stepLabel");
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const captureBtn = document.getElementById("captureBtn");
+    const outlines = document.querySelectorAll(".pose-outline");
+
+    // 啟用前鏡頭
+    async function initCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user"
+          },
+          audio: false
+        });
+        video.srcObject = stream;
+      } catch (err) {
+        alert("無法開啟相機，請確認瀏覽器權限或改用手機開啟此頁面。");
+        console.error(err);
+      }
+    }
+
+    function updateStepUI() {
+      outlines.forEach(el => {
+        const step = Number(el.dataset.step);
+        el.classList.toggle("active", step === currentStep);
+      });
+
+      const labels = ["正面", "左側", "右側"];
+      stepLabel.textContent = `步驟 ${currentStep + 1} / 3：${labels[currentStep]}`;
+
+      prevBtn.disabled = currentStep === 0;
+      nextBtn.disabled = currentStep === maxStep;
+    }
+
+    prevBtn.addEventListener("click", () => {
+      if (currentStep > 0) {
+        currentStep--;
+        updateStepUI();
+      }
     });
-    document.getElementById("video").srcObject = stream;
-  }catch(e){
-    alert("無法開啟相機權限：" + e);
-  }
-}
-initCam();
-</script>
+
+    nextBtn.addEventListener("click", () => {
+      if (currentStep < maxStep) {
+        currentStep++;
+        updateStepUI();
+      }
+    });
+
+    captureBtn.addEventListener("click", () => {
+      if (!video.videoWidth || !video.videoHeight) {
+        alert("相機尚未準備好，請稍等一秒再試一次。");
+        return;
+      }
+
+      // 依 3:4 比例截圖
+      const frameWidth = video.videoWidth;
+      const frameHeight = video.videoHeight;
+      const targetRatio = 3 / 4;
+      let drawWidth, drawHeight, sx, sy;
+
+      const currentRatio = frameWidth / frameHeight;
+
+      if (currentRatio > targetRatio) {
+        // 畫面太寬，裁左右
+        drawHeight = frameHeight;
+        drawWidth = frameHeight * targetRatio;
+        sx = (frameWidth - drawWidth) / 2;
+        sy = 0;
+      } else {
+        // 畫面太高，裁上下
+        drawWidth = frameWidth;
+        drawHeight = frameWidth / targetRatio;
+        sx = 0;
+        sy = (frameHeight - drawHeight) / 2;
+      }
+
+      canvas.width = drawWidth;
+      canvas.height = drawHeight;
+
+      const ctx = canvas.getContext("2d");
+      // 和鏡像一致：水平翻轉
+      ctx.save();
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, sx, sy, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight);
+      ctx.restore();
+
+      const dataUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      const label = ["front", "left", "right"][currentStep];
+
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, "0");
+      const dd = String(now.getDate()).padStart(2, "0");
+
+      link.download = `body-${yyyy}${mm}${dd}-${label}.png`;
+      link.href = dataUrl;
+      link.click();
+    });
+
+    initCamera();
+    updateStepUI();
+  </script>
 </body>
 </html>
