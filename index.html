@@ -5,9 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>體態拍攝模板（三姿勢）</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
+
     body {
       margin: 0;
       background: #000;
@@ -18,6 +17,11 @@
       align-items: center;
       justify-content: center;
       min-height: 100vh;
+      transition: background 0.2s, color 0.2s;
+    }
+    body.bright {
+      background: #ffffff;
+      color: #000;
     }
 
     .app {
@@ -29,16 +33,18 @@
       gap: 8px;
     }
 
-    /* 視訊 + overlay 容器：固定 3:4 */
     .camera-frame {
       position: relative;
       width: 100%;
-      aspect-ratio: 3 / 4;
+      aspect-ratio: 3 / 4; /* 固定 3:4 */
       margin: 0 auto;
       border-radius: 16px;
       overflow: hidden;
       border: 2px solid #00c3ff;
       background: #000;
+    }
+    body.bright .camera-frame {
+      border-color: #0070c9;
     }
 
     video {
@@ -47,20 +53,18 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transform: scaleX(-1); /* 前鏡頭鏡像，符合你在鏡子看到自己 */
+      transform: scaleX(-1); /* 鏡像，像照鏡子 */
     }
 
-    canvas {
-      display: none; /* 拍照用的隱藏畫布 */
-    }
+    canvas { display: none; }
 
-    /* 九宮格與線條 overlay */
     .overlay {
       position: absolute;
       inset: 0;
       pointer-events: none;
     }
 
+    /* 九宮格 */
     .grid-line {
       position: absolute;
       background: rgba(255, 255, 255, 0.28);
@@ -70,6 +74,7 @@
     .h1 { top: 33.333%; left: 0; height: 1px; width: 100%; }
     .h2 { top: 66.666%; left: 0; height: 1px; width: 100%; }
 
+    /* 對齊線：中線 + 胸線 + 腰線 */
     .center-line {
       position: absolute;
       top: 0;
@@ -77,149 +82,104 @@
       left: 50%;
       width: 2px;
       margin-left: -1px;
-      background: rgba(0, 255, 180, 0.7);
+      background: rgba(0, 255, 180, 0.75);
     }
-
     .chest-line {
       position: absolute;
       left: 0;
       width: 100%;
       height: 2px;
       top: 38%;
-      background: rgba(255, 180, 0, 0.75);
+      background: rgba(255, 180, 0, 0.8);
     }
-
     .waist-line {
       position: absolute;
       left: 0;
       width: 100%;
       height: 2px;
       top: 63%;
-      background: rgba(255, 80, 200, 0.7);
+      background: rgba(255, 80, 200, 0.8);
     }
 
-    /* 姿勢外框 (SVG-like 用 div 拼) */
-    .pose-outline {
+    /* 姿勢矩形框（取代醜人形） */
+    .pose-frame {
       position: absolute;
       inset: 0;
       display: none;
     }
+    .pose-frame.active { display: block; }
 
-    .pose-outline.active {
-      display: block;
-    }
-
-    /* 共用人形主體外框：頭、肩、軀幹、骨盆 */
-    .pose-outline .head {
+    /* 頭部框：上方中間 */
+    .head-box {
       position: absolute;
-      width: 14%;
-      aspect-ratio: 1 / 1;
-      border-radius: 50%;
+      width: 40%;
+      height: 14%;
+      border-radius: 12px;
       border: 2px dashed rgba(0, 200, 255, 0.9);
       left: 50%;
-      top: 10%;
+      top: 8%;
       transform: translateX(-50%);
     }
-
-    .pose-outline .torso {
+    /* 軀幹框：胸到腰 */
+    .torso-box {
       position: absolute;
-      width: 30%;
-      height: 26%;
-      border-radius: 40% / 60%;
+      width: 55%;
+      height: 32%;
+      border-radius: 16px;
       border: 2px dashed rgba(0, 200, 255, 0.85);
       left: 50%;
-      top: 24%;
+      top: 26%;
       transform: translateX(-50%);
     }
-
-    .pose-outline .pelvis {
+    /* 骨盆～大腿上緣框 */
+    .hip-box {
       position: absolute;
-      width: 26%;
-      height: 16%;
-      border-radius: 40%;
+      width: 50%;
+      height: 18%;
+      border-radius: 16px;
       border: 2px dashed rgba(0, 200, 255, 0.8);
       left: 50%;
-      top: 47%;
+      top: 50%;
       transform: translateX(-50%);
     }
-
-    .pose-outline .leg-line {
+    /* 腳位置線 */
+    .feet-line {
       position: absolute;
-      width: 2px;
-      background: rgba(0, 200, 255, 0.8);
-      top: 55%;
-      height: 30%;
-    }
-
-    .pose-outline .leg-left  { left: 44%; }
-    .pose-outline .leg-right { left: 56%; }
-
-    .pose-outline .foot-line {
-      position: absolute;
+      width: 40%;
       height: 2px;
-      width: 26%;
       background: rgba(0, 200, 255, 0.8);
       bottom: 9%;
       left: 50%;
       transform: translateX(-50%);
     }
 
-    /* 正面：雙臂略外展 */
-    .pose-front .arm {
-      position: absolute;
-      width: 20%;
-      height: 20%;
-      border-radius: 999px;
-      border: 2px dashed rgba(0, 200, 255, 0.8);
-      top: 26%;
-    }
-    .pose-front .arm-left  { left: 16%; }
-    .pose-front .arm-right { right: 16%; }
-
-    /* 側面：上臂 + 前臂簡化一條 */
-    .pose-side .arm-line {
-      position: absolute;
-      width: 20%;
-      height: 2px;
-      background: rgba(0, 200, 255, 0.8);
-      top: 34%;
-    }
-
-    /* 左側：人面向畫面左邊 */
-    .pose-left .torso,
-    .pose-left .pelvis,
-    .pose-left .head {
+    /* 側身時：整組框左右平移即可，不畫手腳 */
+    .pose-left .head-box,
+    .pose-left .torso-box,
+    .pose-left .hip-box,
+    .pose-left .feet-line {
       left: 40%;
       transform: translateX(-50%);
     }
-    .pose-left .leg-left  { left: 35%; }
-    .pose-left .leg-right { left: 45%; }
-    .pose-left .foot-line { left: 40%; transform: translateX(-50%); }
-    .pose-left .arm-line { left: 22%; }
-
-    /* 右側：人面向畫面右邊（鏡像） */
-    .pose-right .torso,
-    .pose-right .pelvis,
-    .pose-right .head {
+    .pose-right .head-box,
+    .pose-right .torso-box,
+    .pose-right .hip-box,
+    .pose-right .feet-line {
       left: 60%;
       transform: translateX(-50%);
     }
-    .pose-right .leg-left  { left: 55%; }
-    .pose-right .leg-right { left: 65%; }
-    .pose-right .foot-line { left: 60%; transform: translateX(-50%); }
-    .pose-right .arm-line { right: 22%; }
 
-    /* 提示文字 */
     .hint {
       position: absolute;
-      left: 6px;
+      left: 8px;
       top: 6px;
       font-size: 11px;
       color: #eee;
       text-shadow: 0 0 4px #000;
       line-height: 1.3;
-      max-width: 70%;
+      max-width: 76%;
     }
+    body.bright .hint { color: #111; text-shadow: 0 0 4px #fff; }
 
     .controls {
       display: flex;
@@ -251,10 +211,18 @@
       font-weight: 600;
       cursor: pointer;
     }
-
     button:disabled {
       opacity: 0.4;
       cursor: default;
+    }
+
+    .light-btn {
+      flex: none;
+      font-size: 13px;
+      padding: 6px 10px;
+      margin: 0 auto;
+      max-width: 220px;
+      background: linear-gradient(135deg, #ffd54f, #ff9800);
     }
 
     .note {
@@ -264,6 +232,7 @@
       line-height: 1.4;
       margin-top: 2px;
     }
+    body.bright .note { color: #444; }
   </style>
 </head>
 <body>
@@ -279,60 +248,50 @@
         <div class="grid-line h1"></div>
         <div class="grid-line h2"></div>
 
-        <!-- 身體對齊線 -->
+        <!-- 對齊線 -->
         <div class="center-line"></div>
         <div class="chest-line"></div>
         <div class="waist-line"></div>
 
-        <!-- 正面姿勢外框 -->
-        <div class="pose-outline pose-front active" data-step="0">
-          <div class="head"></div>
-          <div class="torso"></div>
-          <div class="pelvis"></div>
-          <div class="leg-line leg-left"></div>
-          <div class="leg-line leg-right"></div>
-          <div class="foot-line"></div>
-          <div class="arm arm-left"></div>
-          <div class="arm arm-right"></div>
+        <!-- 正面框 -->
+        <div class="pose-frame pose-front active" data-step="0">
+          <div class="head-box"></div>
+          <div class="torso-box"></div>
+          <div class="hip-box"></div>
+          <div class="feet-line"></div>
           <div class="hint">
             步驟 1：正面<br>
-            ・站在中線上，雙腳與肩同寬<br>
-            ・胸口貼近橘色線，肚臍在粉色線附近<br>
-            ・手自然下垂，略微離開身體
+            ・頭大致落在上方框內<br>
+            ・胸口靠近橘色線，肚臍在粉色線附近<br>
+            ・腳掌踩在底部藍色線附近，雙腳與肩同寬
           </div>
         </div>
 
-        <!-- 左側姿勢外框 -->
-        <div class="pose-outline pose-side pose-left" data-step="1">
-          <div class="head"></div>
-          <div class="torso"></div>
-          <div class="pelvis"></div>
-          <div class="leg-line leg-left"></div>
-          <div class="leg-line leg-right"></div>
-          <div class="foot-line"></div>
-          <div class="arm-line"></div>
+        <!-- 左側框 -->
+        <div class="pose-frame pose-left" data-step="1">
+          <div class="head-box"></div>
+          <div class="torso-box"></div>
+          <div class="hip-box"></div>
+          <div class="feet-line"></div>
           <div class="hint">
             步驟 2：左側<br>
-            ・左肩面向鏡頭，耳朵在中線附近<br>
-            ・保持自然站姿，不刻意收小腹<br>
-            ・手臂自然垂放在身側
+            ・左肩面向鏡頭，耳朵靠近中線<br>
+            ・自然站好，不刻意收小腹<br>
+            ・腳一樣踩在藍線附近
           </div>
         </div>
 
-        <!-- 右側姿勢外框 -->
-        <div class="pose-outline pose-side pose-right" data-step="2">
-          <div class="head"></div>
-          <div class="torso"></div>
-          <div class="pelvis"></div>
-          <div class="leg-line leg-left"></div>
-          <div class="leg-line leg-right"></div>
-          <div class="foot-line"></div>
-          <div class="arm-line"></div>
+        <!-- 右側框 -->
+        <div class="pose-frame pose-right" data-step="2">
+          <div class="head-box"></div>
+          <div class="torso-box"></div>
+          <div class="hip-box"></div>
+          <div class="feet-line"></div>
           <div class="hint">
             步驟 3：右側<br>
-            ・右肩面向鏡頭，耳朵在中線附近<br>
-            ・同樣保持自然站姿<br>
-            ・完成後就有一組固定三角度
+            ・右肩面向鏡頭，耳朵靠近中線<br>
+            ・同樣自然放鬆站立<br>
+            ・完成後就有固定三角度紀錄
           </div>
         </div>
       </div>
@@ -345,14 +304,14 @@
         <button id="captureBtn">拍照並下載</button>
         <button id="nextBtn">下一個</button>
       </div>
+      <button id="lightBtn" class="light-btn">補光模式：關</button>
       <div class="note">
-        拍照時請把亮度調高一點，盡量使用同一個地點、同一個距離與姿勢，方便比對胸肌與腰線變化。
+        建議：每次都用同一支手機、同一距離與地點拍照，才能清楚看出胸肌與腰線變化。
       </div>
     </div>
   </div>
 
   <script>
-    // 目前步驟：0=正面, 1=左側, 2=右側
     let currentStep = 0;
     const maxStep = 2;
 
@@ -362,20 +321,18 @@
     const prevBtn = document.getElementById("prevBtn");
     const nextBtn = document.getElementById("nextBtn");
     const captureBtn = document.getElementById("captureBtn");
-    const outlines = document.querySelectorAll(".pose-outline");
+    const lightBtn = document.getElementById("lightBtn");
+    const outlines = document.querySelectorAll(".pose-frame");
 
-    // 啟用前鏡頭
     async function initCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user"
-          },
+          video: { facingMode: "user" },
           audio: false
         });
         video.srcObject = stream;
       } catch (err) {
-        alert("無法開啟相機，請確認瀏覽器權限或改用手機開啟此頁面。");
+        alert("無法開啟相機，請確認瀏覽器權限或改用手機瀏覽器開啟此頁面。");
         console.error(err);
       }
     }
@@ -413,22 +370,18 @@
         return;
       }
 
-      // 依 3:4 比例截圖
       const frameWidth = video.videoWidth;
       const frameHeight = video.videoHeight;
       const targetRatio = 3 / 4;
       let drawWidth, drawHeight, sx, sy;
-
       const currentRatio = frameWidth / frameHeight;
 
       if (currentRatio > targetRatio) {
-        // 畫面太寬，裁左右
         drawHeight = frameHeight;
         drawWidth = frameHeight * targetRatio;
         sx = (frameWidth - drawWidth) / 2;
         sy = 0;
       } else {
-        // 畫面太高，裁上下
         drawWidth = frameWidth;
         drawHeight = frameWidth / targetRatio;
         sx = 0;
@@ -437,9 +390,8 @@
 
       canvas.width = drawWidth;
       canvas.height = drawHeight;
-
       const ctx = canvas.getContext("2d");
-      // 和鏡像一致：水平翻轉
+
       ctx.save();
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
@@ -458,6 +410,11 @@
       link.download = `body-${yyyy}${mm}${dd}-${label}.png`;
       link.href = dataUrl;
       link.click();
+    });
+
+    lightBtn.addEventListener("click", () => {
+      const isBright = document.body.classList.toggle("bright");
+      lightBtn.textContent = isBright ? "補光模式：開" : "補光模式：關";
     });
 
     initCamera();
