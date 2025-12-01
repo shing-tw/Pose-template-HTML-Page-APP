@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pose Alignment Template</title>
+<style>
+body{
+  margin:0;
+  background:#000;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+.container{
+  position:relative;
+  width:100%;
+  max-width:420px;
+  aspect-ratio:3/4;
+  background:#000;
+}
+#video{
+  position:absolute;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  z-index:1;
+}
+.grid{
+  position:absolute;
+  width:100%;
+  height:100%;
+  z-index:2;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  grid-template-rows:repeat(3,1fr);
+  border:2px solid rgba(255,255,255,0.6);
+}
+.grid div{
+  border:1px solid rgba(255,255,255,0.3);
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <video id="video" autoplay playsinline></video>
+  <div class="grid">
+    <div></div><div></div><div></div>
+    <div></div><div></div><div></div>
+    <div></div><div></div><div></div>
+  </div>
+</div>
+
+<script>
+async function initCam(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:"user" },
+      audio:false
+    });
+    document.getElementById("video").srcObject = stream;
+  }catch(e){
+    alert("無法開啟相機權限：" + e);
+  }
+}
+initCam();
+</script>
+</body>
+</html>
